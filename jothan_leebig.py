@@ -1,13 +1,18 @@
 import random
-from abstract_robot import AbstractRobot
+from copy import deepcopy
+from norman_abstract_robot import AbstractRobot
 import rg
 from settings import settings
+
+
+DEBUG = True
 
 
 class Height(object):
     INVALID = 65536
     OBSTACLE = 512
     SPAWN = 256
+    DIBS = 128  # Prevents collision with friendlies
     # Friend and enemy heights will be compounded by recursion.
     #FRIEND = 8.0  # For exponential curves
     #ENEMY = -8.0
@@ -24,10 +29,31 @@ class Robot(AbstractRobot):
     _Jothan Leebig: http://en.wikipedia.org/wiki/The_Naked_Sun
     """
     def __init__(self):
-        self.robots = None
-        self.solaria = None
+        self.robots = None  # Locations of all robots in the game
+        self.solaria = None  # A landscape where enemies form troughs and friends and obstacles form peaks
+        self.robot_index = None  # We have n in the field. How many have moved?
+        self.team = None  # Dictionary of locations and robots on our team
+        self.last_game = None  # The state of the previous turn
 
     def act(self, game):
+        # What do we know?
+        if self.robots != set(game['robots'].keys()):
+            # Robots have moved since we last checked. This is a new turn.
+            if DEBUG:
+                print('New turn')
+            self.team = {loc: bot for loc, bot in game['robots'].iteritems()}
+            self.robot_index = 0
+            self.init_solaria()
+            self.populate_solaria(game)
+            self.robots = set(game['robots'].keys())
+        else:
+            self.robot_index += 1
+        if self.robot_index == len(self.team) - 1:
+            if DEBUG:
+                print('Robot index is {}, team size is {}, saving game state'.format(
+                    self.robot_index, len(self.team)))
+            self.last_game = deepcopy(game)
+
         # Attack neighbours
         adj_enemies = self.get_adjacent_bots(game)
         if adj_enemies:
@@ -36,15 +62,43 @@ class Robot(AbstractRobot):
             return ['attack', next(iter(adj_enemies.keys()))]
 
         # Move downhill
-        if self.robots != set(game['robots'].keys()):
-            # Robots have moved since we last checked
-            self.init_solaria()
-            self.populate_solaria(game)
-            self.robots = set(game['robots'].keys())
         downhill = self.get_downhill()
         if downhill == self.location:
             return ['guard']
+        # Mark where we will move or attack, so that other team members won't try to move there.
+        x, y = downhill
+        self.solaria[y][x] += Height.DIBS
+        if self.collided(downhill, game):
+            if DEBUG:
+                print('Preemptive attack location {}'.format(downhill))
+            return ['attack', downhill]
         return ['move', downhill]
+
+    def collided(self, loc, game):
+        """
+        Checks whether robots collided at loc in the last turn
+        """
+        if not self.last_game:
+            # This is the first turn.
+            return False
+        collided_friend = collided_enemy = False
+        adjacent = rg.locs_around(loc)
+        for adj in adjacent:
+            if (
+                adj in game['robots'] and
+                adj in self.last_game['robots'] and
+                game['robots'][adj].player_id == self.last_game['robots'][adj]['player_id'] and
+                game['robots'][adj].hp == self.last_game['robots'][adj]['hp'] - settings.collision_damage
+            ):
+                if game['robots'][adj].player_id == self.player_id:
+                    collided_friend = True
+                else:
+                    collided_enemy = True
+                if collided_friend and collided_enemy:
+                    if DEBUG:
+                        print('Avoided collision at {}'.format(loc))
+                    return True
+        return False
 
     def curve_solaria(self, x, y, inc, exp=False):
         """
@@ -131,7 +185,7 @@ class Robot(AbstractRobot):
             elif height < lowest:
                 lowest = height
                 locs = [(sxa, sya)]
-        return random.choice(locs)
+        return locs[0] if len(locs) == 1 else random.choice(locs)
 
     def init_solaria(self):
         """
