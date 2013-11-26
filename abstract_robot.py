@@ -64,3 +64,4 @@ class AbstractRobot(object):
             return True
 
         return False
+

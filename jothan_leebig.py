@@ -1,6 +1,6 @@
 import random
 from copy import deepcopy
-from norman_abstract_robot import AbstractRobot
+from abstract_robot import AbstractRobot
 import rg
 from settings import settings
 
@@ -29,30 +29,35 @@ class Robot(AbstractRobot):
     _Jothan Leebig: http://en.wikipedia.org/wiki/The_Naked_Sun
     """
     def __init__(self):
+        self.turn = 1  # What turn is this
         self.robots = None  # Locations of all robots in the game
         self.solaria = None  # A landscape where enemies form troughs and friends and obstacles form peaks
-        self.robot_index = None  # We have n in the field. How many have moved?
+        self.robot_id = None  # We have n in the field. How many have moved?
         self.team = None  # Dictionary of locations and robots on our team
         self.last_game = None  # The state of the previous turn
 
     def act(self, game):
         # What do we know?
         if self.robots != set(game['robots'].keys()):
-            # Robots have moved since we last checked. This is a new turn.
-            if DEBUG:
-                print('New turn')
-            self.team = {loc: bot for loc, bot in game['robots'].iteritems()}
-            self.robot_index = 0
+            # Robots have moved since we last checked.
+            self.turn += 1
+            self.team = dict([[loc, bot] for loc, bot in game['robots'].iteritems() if bot.player_id == self.player_id])
+            self.robot_id = 1
             self.init_solaria()
             self.populate_solaria(game)
             self.robots = set(game['robots'].keys())
-        else:
-            self.robot_index += 1
-        if self.robot_index == len(self.team) - 1:
             if DEBUG:
-                print('Robot index is {}, team size is {}, saving game state'.format(
-                    self.robot_index, len(self.team)))
+                print('Turn {}'.format(self.turn))
+        else:
+            self.robot_id += 1
+        if self.robot_id == len(self.team):
+            # This is the last robot on our team
+            if DEBUG:
+                print('Saving game state')
             self.last_game = deepcopy(game)
+
+        if DEBUG:
+            print('Robot {} of {}'.format(self.robot_id, len(self.team)))
 
         # Attack neighbours
         adj_enemies = self.get_adjacent_bots(game)
@@ -78,6 +83,11 @@ class Robot(AbstractRobot):
         """
         Checks whether robots collided at loc in the last turn
         """
+        # TODO: Improve collision detection.
+        # This method results in false positives because downhill last turn 
+        # may not be downhill this turn.
+        # Sometimes it also results in false negatives. Cause unknown. Perhaps 
+        # it is not being called.
         if not self.last_game:
             # This is the first turn.
             return False
@@ -229,3 +239,4 @@ class Robot(AbstractRobot):
                 print '{:03d}'.format(x),
             print
         print
+
