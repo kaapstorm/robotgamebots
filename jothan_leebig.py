@@ -32,7 +32,7 @@ class Robot(AbstractRobot):
         self.turn = 1  # What turn is this
         self.robots = None  # Locations of all robots in the game
         self.solaria = None  # A landscape where enemies form troughs and friends and obstacles form peaks
-        self.robot_id = None  # We have n in the field. How many have moved?
+        self.robot_1index = None  # We have n in the field. How many have moved?
         self.team = None  # Dictionary of locations and robots on our team
         self.last_game = None  # The state of the previous turn
 
@@ -42,22 +42,22 @@ class Robot(AbstractRobot):
             # Robots have moved since we last checked.
             self.turn += 1
             self.team = dict([[loc, bot] for loc, bot in game['robots'].iteritems() if bot.player_id == self.player_id])
-            self.robot_id = 1
+            self.robot_1index = 1
             self.init_solaria()
             self.populate_solaria(game)
             self.robots = set(game['robots'].keys())
             if DEBUG:
                 print('Turn {}'.format(self.turn))
         else:
-            self.robot_id += 1
-        if self.robot_id == len(self.team):
+            self.robot_1index += 1
+        if self.robot_1index == len(self.team):
             # This is the last robot on our team
             if DEBUG:
                 print('Saving game state')
             self.last_game = deepcopy(game)
 
         if DEBUG:
-            print('Robot {} of {}'.format(self.robot_id, len(self.team)))
+            print('Robot {} is {} of {}'.format(self.robot_id, self.robot_1index, len(self.team)))
 
         # Attack neighbours
         adj_enemies = self.get_adjacent_bots(game)
@@ -84,9 +84,9 @@ class Robot(AbstractRobot):
         Checks whether robots collided at loc in the last turn
         """
         # TODO: Improve collision detection.
-        # This method results in false positives because downhill last turn 
+        # This method results in false positives because downhill last turn
         # may not be downhill this turn.
-        # Sometimes it also results in false negatives. Cause unknown. Perhaps 
+        # Sometimes it also results in false negatives. Cause unknown. Perhaps
         # it is not being called.
         if not self.last_game:
             # This is the first turn.
